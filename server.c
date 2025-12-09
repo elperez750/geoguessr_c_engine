@@ -7,6 +7,30 @@
 #include <stdlib.h> // Include for EXIT_FAILURE
 
 
+  char* get_header_value(char *request, char *header_name) {
+        size_t header_size = strlen(header_name);
+
+        char *line = strstr(request, "\r\n");
+        if (!line) return NULL;
+        line += 2;
+
+        while (line && *line != '\r') {
+            if (strncmp(line, header_name, header_size) == 0) {
+                char *colon = strstr(line, ": ");
+                if (colon) {
+                    return colon + 2;  // Skip ": "
+                }
+
+            }
+            line = strstr(line, "\r\n");
+            if(line)line+=2;
+
+        }
+        return NULL;
+
+    }
+
+
 
 int main() {
     // Create socket
@@ -27,7 +51,7 @@ int main() {
        
     int opt = 1;
     // This allows the socket to bind even if the port is in TIME_WAIT state.
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
         perror("setsockopt failed");
         exit(EXIT_FAILURE);
     }
@@ -36,7 +60,7 @@ int main() {
     struct sockaddr_in address;
     address.sin_family = AF_INET; // Address family (IPv4 vs IPv6)
     address.sin_addr.s_addr = INADDR_ANY; // IP address
-    address.sin_port = htons(3000);  // Port 8080
+    address.sin_port = htons(8080);  // Port 8080
 
 
     /*
@@ -69,24 +93,50 @@ int main() {
         buffer[bytes_read] = '\0';
 
 
-        printf("Data: %s\n", buffer);
-
+        
         char method[16];
         char route[256];
         char protocol[16];
-        char host[16];
-
 
         int items_assigned = sscanf(buffer, "%15s %255s %15s", method, route, protocol);
         if (items_assigned >= 2) {
             printf("Method: %s, Route %s, Protocol %s\n", method, route, protocol);
+        };
+
+      
+        char *host = get_header_value(buffer, "Host");
+        if(host) {
+            printf("The host was succesfully returned %s\n", host);
         }
 
-        sscanf(buffer, "%15s", host);
-        printf("This is the host of the call %s", host);
+        char *user_agent = get_header_value(buffer, "User-Agent");
+        if (user_agent) {
+            printf("The user agent was succesfully returned! %s\n", user_agent);
+        }
+
+        char *success_response = "HTTP/1.1 200 OK\r\n\r\nWelcome";
+        char *error_response = "HTTP/1.1 404 Not Found\r\n\r\nFuck you";
+        if (strcmp(route, "/") == 0) {
+            char *response = "HTTP/1.1 200 OK\r\n\r\nWelcome home!";
+            write(client_fd, response, strlen(response));
+        } 
+        else if (strcmp(route, "/about") == 0) {
+            char *response = "HTTP/1.1 200 OK\r\n\r\nThis is my HTTP server in C";
+            write(client_fd, response, strlen(response));
+        }
+        else if (strcmp(route, "/api/data") == 0) {
+            char *response = "HTTP/1.1 200 OK\r\n\r\n{\"message\": \"Hello from API\"}";
+            write(client_fd, response, strlen(response));
+        }
+        else {
+            write(client_fd, error_response, strlen(error_response));
         
-        char *response =  "HTTP/1.1 200 OK\r\n\r\nHello from server!";
-        write(client_fd, response, strlen(response));
+        }
+
+  
+
+       
+   
         
 
 
