@@ -1,0 +1,8 @@
+---
+triple:          'arm64-apple-darwin'
+binary-path:     server
+relocations:
+  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _get_header_value, symObjAddr: 0x0, symBinAddr: 0x10000389C, symSize: 0x150 }
+  - { offsetInCU: 0x83, offset: 0x83, size: 0x8, addend: 0x0, symName: _get_header_value, symObjAddr: 0x0, symBinAddr: 0x10000389C, symSize: 0x150 }
+  - { offsetInCU: 0xF1, offset: 0xF1, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x150, symBinAddr: 0x1000039EC, symSize: 0x358 }
+...

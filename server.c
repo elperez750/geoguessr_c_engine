@@ -3,8 +3,83 @@
 #include <sys/socket.h>
 #include <netinet/in.h>
 #include <unistd.h>
-#include  <string.h>
+#include <string.h>
 #include <stdlib.h> // Include for EXIT_FAILURE
+
+    // Takes in the request and the header name
+  char* get_header_value(char *request, char *header_name) {
+
+        // Header size. 
+        // Example: Host, user_agent
+        size_t header_size = strlen(header_name);
+
+
+        // This finds the end of the first line, denoted by \r\n
+
+        char *line = strstr(request, "\r\n");
+
+        // If we don't get the line, that means that we don't have one
+        if (!line) return NULL;
+
+        // Otherwise, we add two to the line in order to get to the next line and skip \r\n
+        line += 2;
+
+        // While we have a line and the line is not \r which is the end character.
+        while (line && *line != '\r') {
+
+            // We use strncmp becuase this lets us specify the amount of chars to compare
+            // We compare line with header_name up to header_size characters
+            // This returns 0 if the strings are equal
+            if (strncmp(line, header_name, header_size) == 0) {
+
+                // If they are equal, we see where the ": " starts. Thats because we need to skip over it to get the header we want
+                char *colon = strstr(line, ": ");
+                if (colon) {
+
+                    // We get where our header starts
+                    char *line_start = colon + 2;
+
+                    // Go to the end of the line
+                    char *line_end = strstr(line_start, "\r\n");
+                    
+
+                    // If we run out of space, return NULL
+                    if(!line_end) {
+                        return NULL;
+                    }
+
+                    // Otherwise, we want to get the size of the header
+                    // We subtract where line end address is from line start address
+                    size_t result_size = line_end - line_start;
+
+
+                    // allocate result size + 1 for the header.
+                    // We will copy the header into result
+                    // We do result_size + 1 to include '\0' 
+                    char* result = malloc(result_size + 1);
+
+                    // We will copy result_size characters from line_start into result
+                    strncpy(result, line_start, result_size);
+                    result[result_size] = '\0';
+
+                    return result;
+                }
+
+            }
+
+            // Otherwise, we find the end of the string. 
+            line = strstr(line, "\r\n");
+
+
+            // If we have a line we add two to jump over \r\n. We enter the while loop again
+            if(line)line+=2;
+
+        }
+
+        // If we exit without returning anything, we return null
+        return NULL;
+
+    }
 
 
 
@@ -27,7 +102,7 @@ int main() {
        
     int opt = 1;
     // This allows the socket to bind even if the port is in TIME_WAIT state.
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR | SO_REUSEPORT, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
         perror("setsockopt failed");
         exit(EXIT_FAILURE);
     }
@@ -36,7 +111,7 @@ int main() {
     struct sockaddr_in address;
     address.sin_family = AF_INET; // Address family (IPv4 vs IPv6)
     address.sin_addr.s_addr = INADDR_ANY; // IP address
-    address.sin_port = htons(3000);  // Port 8080
+    address.sin_port = htons(8080);  // Port 8080
 
 
     /*
@@ -60,8 +135,6 @@ int main() {
         int client_fd = accept(server_fd, NULL, NULL);
 
 
-        printf("client file descriptor %d\n", client_fd);
-
         char buffer[1024];
 
         // Pulls data from client_fd into buffer. This will read up to 1023 bytes (saves room for null terminator)
@@ -69,24 +142,62 @@ int main() {
         buffer[bytes_read] = '\0';
 
 
-        printf("Data: %s\n", buffer);
-
+        printf("This is the buffer %s\n", buffer);
         char method[16];
         char route[256];
         char protocol[16];
-        char host[16];
-
 
         int items_assigned = sscanf(buffer, "%15s %255s %15s", method, route, protocol);
-        if (items_assigned >= 2) {
-            printf("Method: %s, Route %s, Protocol %s\n", method, route, protocol);
+        // if (items_assigned >= 2) {
+        //     printf("Method: %s, Route %s, Protocol %s\n", method, route, protocol);
+        // };
+
+      
+        char *host = get_header_value(buffer, "Host");
+        if(host) {
+            printf("The host was succesfully returned %s\n", host);
         }
 
-        sscanf(buffer, "%15s", host);
-        printf("This is the host of the call %s", host);
+        char *user_agent = get_header_value(buffer, "User-Agent");
+        if (user_agent) {
+            printf("The user agent was succesfully returned! %s\n", user_agent);
+        }
+
+        char *success_response = "HTTP/1.1 200 OK\r\n\r\nWelcome";
+        char *error_response = "HTTP/1.1 404 Not Found\r\n\r\nFuck you";
+        if (strcmp(route, "/") == 0) {
+            char *response = "HTTP/1.1 200 OK\r\n\r\nWelcome home!";
+            write(client_fd, response, strlen(response));
+        } 
+        else if (strcmp(route, "/about") == 0) {
+            char *response = "HTTP/1.1 200 OK\r\n\r\nThis is my HTTP server in C";
+            write(client_fd, response, strlen(response));
+        }
+        else if (strcmp(route, "/api/data") == 0) {
+            char *response;
+            if (strcmp(method, "POST") == 0) {
+                response = "HTTP/1.1 200 OK\r\n\r\nThis will be the post method";
+                
+                write(client_fd, response, strlen(response));
+            }
+            else{
+                response = "Fucking bitch";
+                write(client_fd, response, strlen(response));
+            }
+         
+           
+        }
+        else {
+            write(client_fd, error_response, strlen(error_response));
         
-        char *response =  "HTTP/1.1 200 OK\r\n\r\nHello from server!";
-        write(client_fd, response, strlen(response));
+        }
+
+        free(host);
+        free(user_agent);
+  
+
+       
+   
         
 
 
