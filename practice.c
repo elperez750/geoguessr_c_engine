@@ -9,7 +9,6 @@ int manual_string_length(char *str) {
     for (i = 0; str[i] != '\0'; i++) {
 
     }
-
     return i;
 }
 
@@ -66,15 +65,37 @@ char *append_string(char *src, char *dest) {
     
     return new_char;
 
-
-
-
-
-
-
-
-
 }
+
+
+
+int manual_string_compare(char *str1, char *str2) {
+    int i = 0;
+    while(str1[i] != '\0' && str2[i] != '\0') {
+        if (str1[i] != str2[i]) {
+            return str1[i] - str2[i];
+        }
+        i++;
+    }
+
+    return str1[i] - str2[i];
+}
+
+
+/*
+Next Exercise: String Comparison
+Write a function that compares two strings and returns:
+
+Negative number if str1 comes before str2 alphabetically
+0 if they're equal
+Positive number if str1 comes after str2
+
+
+
+printf("%d\n", manual_string_compare("apple", "banana"));  // negative
+printf("%d\n", manual_string_compare("test", "test"));     // 0
+printf("%d\n", manual_string_compare("zebra", "apple"));   // positive
+*/
 
 
 
@@ -83,8 +104,15 @@ char *append_string(char *src, char *dest) {
 int main() {
     char line[16] = "Nami";
 
-    char str1[16] = "Elliott";
-    char str2[16] = "Perez";
+
+    char str1[16] = "equa";
+    char str2[16] = "equal";
+
+
+
+    int difference = manual_string_compare(str1, str2);
+
+    printf("Here is the difference %d\n", difference);
 
     int length = manual_string_length(line);
     char *string = manual_string_copy(line);
