@@ -6,13 +6,21 @@
 #include <string.h>
 #include <stdlib.h> // Include for EXIT_FAILURE
 
+
+
+typedef struct {
+    char name[30];
+    int age;
+} Person;
+
+
     // Takes in the request and the header name
-  char* get_header_value(char *request, char *header_name) {
+char* get_header_value(char *request, char *header_name) {
 
         // Header size. 
         // Example: Host, user_agent
         size_t header_size = strlen(header_name);
-
+        
 
         // This finds the end of the first line, denoted by \r\n
 
@@ -35,7 +43,7 @@
                 // If they are equal, we see where the ": " starts. Thats because we need to skip over it to get the header we want
                 char *colon = strstr(line, ": ");
                 if (colon) {
-
+                    
                     // We get where our header starts
                     char *line_start = colon + 2;
 
@@ -57,6 +65,9 @@
                     // We will copy the header into result
                     // We do result_size + 1 to include '\0' 
                     char* result = malloc(result_size + 1);
+                    if (!result) {
+                        return NULL;
+                    }
 
                     // We will copy result_size characters from line_start into result
                     strncpy(result, line_start, result_size);
@@ -81,6 +92,49 @@
 
     }
 
+
+
+char* get_request_body(char *response) {
+    char *end_of_headers = strstr(response, "\r\n\r\n");
+    char *start_of_body = strstr(end_of_headers, "n");
+
+    char *name_start = strstr(start_of_body, "=");
+
+    name_start += 1;
+    char *name_end = strstr(name_start, "&");
+
+    size_t name_size = name_end - name_start;
+
+    Person *person1 = malloc(sizeof(Person)); 
+    char *name = malloc(name_size + 1);
+
+    strncpy(name, name_start, name_size);
+    name[name_size] = '\0';
+    strncpy(person1->name, name, name_size);
+    free(name);
+
+
+  
+    char *age_start = strstr(start_of_body, "&age=");
+    if (age_start) {
+        age_start += 5;  // Skip "&age=", now at "21"
+    }
+    size_t age_size = strlen(age_start);
+    printf("This is the age size %zu\n", age_size);
+    
+    char *age = malloc(age_size + 1);
+    strncpy(age, age_start, age_size);
+    person1->age = atoi(age);   
+    free(age);
+
+    printf("This is the age %d\n", person1->age);
+
+    printf("These are the headers %s\n", person1->name);
+
+    free(person1);
+
+    return start_of_body;
+}    
 
 
 int main() {
@@ -163,6 +217,11 @@ int main() {
             printf("The user agent was succesfully returned! %s\n", user_agent);
         }
 
+        char *content_length = get_header_value(buffer, "Content-Length");
+        if (content_length) {
+            printf("The content length was returne succesfully! %s\n", content_length);
+        }
+
         char *success_response = "HTTP/1.1 200 OK\r\n\r\nWelcome";
         char *error_response = "HTTP/1.1 404 Not Found\r\n\r\nFuck you";
         if (strcmp(route, "/") == 0) {
@@ -191,6 +250,9 @@ int main() {
             write(client_fd, error_response, strlen(error_response));
         
         }
+
+        char *request = get_request_body(buffer);
+
 
         free(host);
         free(user_agent);
