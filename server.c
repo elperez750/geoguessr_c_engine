@@ -14,7 +14,58 @@ typedef struct {
 } Person;
 
 
-    // Takes in the request and the header name
+typedef struct {
+    char path[256];  // Everything before the question mark
+    char query[256]; // Everything after the question mark
+} ParsedRoute;
+
+
+
+ParsedRoute* split_route(char *route) {
+    ParsedRoute *result = malloc(sizeof(ParsedRoute));
+
+    char* path_end = strstr(route, "?");
+
+
+    if (path_end == NULL) {
+        strcpy(result->path, route);
+        result->query[0] = '\0';
+        return result;
+    }
+    
+    size_t path_length = path_end - route;
+
+ 
+    strncpy(result->path, route, path_length);
+    result->path[path_length] = '\0';
+
+
+    char* query_start = path_end + 1;
+
+    
+
+
+    strcpy(result->query, query_start);
+
+
+
+    return result;
+
+
+
+
+    // Your code here
+    // Hint: Find the '?', calculate sizes, use strncpy
+
+    // /api/game?rounds=5
+    // /api/game is the path
+    // rounds=5 is the query
+
+}
+
+
+
+// Takes in the request and the header name
 char* get_header_value(char *request, char *header_name) {
 
         // Header size. 
@@ -23,7 +74,6 @@ char* get_header_value(char *request, char *header_name) {
         
 
         // This finds the end of the first line, denoted by \r\n
-
         char *line = strstr(request, "\r\n");
 
         // If we don't get the line, that means that we don't have one
@@ -137,6 +187,38 @@ char* get_request_body(char *response) {
 }    
 
 
+char* find_query_start(char *route) {
+    // Your code here
+    // Hint: You've used strstr() and strchr() before...
+
+    // /api/game?rounds=5
+
+    char* query_start = strstr(route, "?");
+    if (query_start == NULL) {
+        return NULL;
+    }
+
+    else {
+        return query_start + 1;
+    }
+
+    // check if string has ?
+    // if not, we return null
+    // 
+
+}
+
+
+void test_query(char* input) {
+    char *result = find_query_start(input);
+    
+    if (result != NULL) {
+        printf("Input: %-20s | Result: %s\n", input, result);
+    } else {
+        printf("Input: %-20s | Result: NULL\n", input);
+    }
+}
+
 int main() {
     // Create socket
     //  AF_INET is IPv4
@@ -207,36 +289,44 @@ int main() {
         // };
 
       
-        char *host = get_header_value(buffer, "Host");
-        if(host) {
-            printf("The host was succesfully returned %s\n", host);
-        }
+        // char *host = get_header_value(buffer, "Host");
+        // if(host) {
+        //     printf("The host was succesfully returned %s\n", host);
+        // }
 
-        char *user_agent = get_header_value(buffer, "User-Agent");
-        if (user_agent) {
-            printf("The user agent was succesfully returned! %s\n", user_agent);
-        }
+        // char *user_agent = get_header_value(buffer, "User-Agent");
+        // if (user_agent) {
+        //     printf("The user agent was succesfully returned! %s\n", user_agent);
+        // }
 
-        char *content_length = get_header_value(buffer, "Content-Length");
-        if (content_length) {
-            printf("The content length was returne succesfully! %s\n", content_length);
-        }
+        // char *content_length = get_header_value(buffer, "Content-Length");
+        // if (content_length) {
+        //     printf("The content length was returne succesfully! %s\n", content_length);
+        // }
 
+        // If request is succesful
         char *success_response = "HTTP/1.1 200 OK\r\n\r\nWelcome";
+
+        // If our request fails
         char *error_response = "HTTP/1.1 404 Not Found\r\n\r\nFuck you";
+
         if (strcmp(route, "/") == 0) {
             char *response = "HTTP/1.1 200 OK\r\n\r\nWelcome home!";
             write(client_fd, response, strlen(response));
         } 
+
         else if (strcmp(route, "/about") == 0) {
             char *response = "HTTP/1.1 200 OK\r\n\r\nThis is my HTTP server in C";
             write(client_fd, response, strlen(response));
         }
+
         else if (strcmp(route, "/api/data") == 0) {
             char *response;
             if (strcmp(method, "POST") == 0) {
                 response = "HTTP/1.1 200 OK\r\n\r\nThis will be the post method";
-                
+                char *request = get_request_body(buffer);
+                printf("This is gonna be the request%s\n", request);
+
                 write(client_fd, response, strlen(response));
             }
             else{
@@ -251,11 +341,10 @@ int main() {
         
         }
 
-        char *request = get_request_body(buffer);
 
 
-        free(host);
-        free(user_agent);
+        // free(host);
+        // free(user_agent);
   
 
        
@@ -292,8 +381,27 @@ int main() {
         
         */
 
+
     
-        close(client_fd);
+    char *test_query_one = "/api/game?rounds=5";
+    char *test_query_two = "/about";
+    char *test_query_three = "/?test=1";
+
+
+    test_query(test_query_one);
+    test_query(test_query_two);
+    test_query(test_query_three);
+
+
+
+    ParsedRoute *route_to_use = split_route(test_query_one);
+
+    printf("This is the route: %s\n", route_to_use->path);
+    printf("This is the query: %s\n", route_to_use->query);
+
+    free(route_to_use);
+
+    close(client_fd);
     }
 
 

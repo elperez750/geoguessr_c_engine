@@ -2,7 +2,11 @@
 triple:          'arm64-apple-darwin'
 binary-path:     server
 relocations:
-  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _get_header_value, symObjAddr: 0x0, symBinAddr: 0x10000389C, symSize: 0x150 }
-  - { offsetInCU: 0x83, offset: 0x83, size: 0x8, addend: 0x0, symName: _get_header_value, symObjAddr: 0x0, symBinAddr: 0x10000389C, symSize: 0x150 }
-  - { offsetInCU: 0xF1, offset: 0xF1, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x150, symBinAddr: 0x1000039EC, symSize: 0x358 }
+  - { offsetInCU: 0x26, offset: 0x26, size: 0x8, addend: 0x0, symName: _split_route, symObjAddr: 0x0, symBinAddr: 0x1000033DC, symSize: 0x94 }
+  - { offsetInCU: 0x83, offset: 0x83, size: 0x8, addend: 0x0, symName: _split_route, symObjAddr: 0x0, symBinAddr: 0x1000033DC, symSize: 0x94 }
+  - { offsetInCU: 0xE3, offset: 0xE3, size: 0x8, addend: 0x0, symName: _get_header_value, symObjAddr: 0x94, symBinAddr: 0x100003470, symSize: 0x1E8 }
+  - { offsetInCU: 0x197, offset: 0x197, size: 0x8, addend: 0x0, symName: _get_request_body, symObjAddr: 0x27C, symBinAddr: 0x100003658, symSize: 0x1C0 }
+  - { offsetInCU: 0x24B, offset: 0x24B, size: 0x8, addend: 0x0, symName: _find_query_start, symObjAddr: 0x43C, symBinAddr: 0x100003818, symSize: 0x60 }
+  - { offsetInCU: 0x281, offset: 0x281, size: 0x8, addend: 0x0, symName: _test_query, symObjAddr: 0x49C, symBinAddr: 0x100003878, symSize: 0x7C }
+  - { offsetInCU: 0x2B3, offset: 0x2B3, size: 0x8, addend: 0x0, symName: _main, symObjAddr: 0x518, symBinAddr: 0x1000038F4, symSize: 0x390 }
 ...
