@@ -6,16 +6,35 @@
 
 
 int main() {
+
+    // Open csv with 30 Washington cities
     FILE *fptr = fopen("cities.csv", "r");
 
+    // If no space, then return error
     if (fptr == NULL) {
         perror("File did not open properly");
         return 1;
     }
 
 
+    // Initializing the city count
     int city_count;
+
+    /*
+    These are the fields for city: 
+
+    typedef struct {
+    char name[50];
+    double latitude;
+    double longitude;
+    int population;
+        } City;
+    
+    
+    */
     City *my_cities = load_cities_from_csv(fptr, &city_count);
+
+    // If no returned we exit
     if (my_cities == NULL) {
         fprintf(stderr, "Failed to load cities\n");
         fclose(fptr);

@@ -19,7 +19,6 @@ GameState* start_new_game(City *cities, int count, int rounds) {
     }
 
 
-
     // Get random city address
     City *random_city = get_random_city(count, cities);    
 

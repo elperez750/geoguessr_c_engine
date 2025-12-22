@@ -5,54 +5,133 @@
 #include <unistd.h>
 #include <string.h>
 #include <stdlib.h> // Include for EXIT_FAILURE
+#include "city.h"
+#include "game.h"
 
-
-
-typedef struct {
+// This is the struct to extract the post parameters passed in
+typedef struct
+{
     char name[30];
     int age;
 } Person;
 
-
-typedef struct {
+// This is the struct that holds the path and query
+typedef struct
+{
     char path[256];  // Everything before the question mark
     char query[256]; // Everything after the question mark
 } ParsedRoute;
 
+// This is the individual query param for a route
+typedef struct
+{
+    char key[256];
+    char value[256];
+} QueryParam;
 
+// This holds multiple query params
+typedef struct
+{
+    QueryParam params[10];
+    int count;
+} QueryParams;
 
-ParsedRoute* split_route(char *route) {
+GameState *current_game = NULL;
+City *my_cities = NULL;
+int city_count = 0;
+
+// JSON response builder
+void send_json_response(int client_fd, char *json_data)
+{
+    char response[4096];
+    int len = snprintf(response, sizeof(response),
+                       "HTTP/1.1 200 OK\r\n"
+                       "Content-Type: application/json\r\n"
+                       "Content-Length: %zu\r\n"
+                       "\r\n"
+                       "%s",
+                       strlen(json_data),
+                       json_data);
+    write(client_fd, response, len);
+}
+
+void split_query_params(QueryParams *qp, char *query)
+{
+    // "/api/game?rounds=5&difficulty=hard"
+
+    // "rounds=5&difficulty=hard&location=seattle"
+    // If there is no query we return
+
+    qp->count = 0;
+    if (query == NULL)
+        return;
+
+    char query_copy[256];
+
+    strncpy(query_copy, query, sizeof(query_copy) - 1);
+    query_copy[sizeof(query_copy) - 1] = '\0';
+
+    // saveptr1 is for each param
+    // ex: "rounds=5", "difficulty=hard"
+    // saveptr2 is for each query in the param
+    // ex: round, 5
+
+    char *saveptr1, *saveptr2;
+
+    char *pair = strtok_r(query_copy, "&", &saveptr1);
+
+    while (pair != NULL)
+    {
+
+        char *key = strtok_r(pair, "=", &saveptr2);
+        char *value = strtok_r(NULL, "=", &saveptr2);
+
+        if (key && value)
+        {
+            size_t key_size = sizeof(qp->params[qp->count].key);
+            size_t value_size = sizeof(qp->params[qp->count].value);
+
+            strncpy(qp->params[qp->count].key, key, key_size - 1);
+            qp->params[qp->count].key[key_size - 1] = '\0';
+
+            strncpy(qp->params[qp->count].value, value, value_size - 1);
+            qp->params[qp->count].value[value_size - 1] = '\0';
+            printf("Key: %s, Value: %s\n", qp->params[qp->count].key, qp->params[qp->count].value);
+            qp->count++;
+        }
+
+        pair = strtok_r(NULL, "&", &saveptr1);
+    }
+
+    // route: /api/game
+    // query: rounds=5&diffculty=hard
+    // rounds = 5
+    // difficulty = hard
+}
+
+ParsedRoute *split_route(char *route)
+{
     ParsedRoute *result = malloc(sizeof(ParsedRoute));
 
-    char* path_end = strstr(route, "?");
+    char *path_end = strstr(route, "?");
 
-
-    if (path_end == NULL) {
+    if (path_end == NULL)
+    {
         strcpy(result->path, route);
         result->query[0] = '\0';
         return result;
     }
-    
+
     size_t path_length = path_end - route;
 
- 
     strncpy(result->path, route, path_length);
     result->path[path_length] = '\0';
 
-
-    char* query_start = path_end + 1;
-
-    
-
+    char *query_start = path_end + 1;
 
     strcpy(result->query, query_start);
 
-
-
     return result;
-
-
-
 
     // Your code here
     // Hint: Find the '?', calculate sizes, use strncpy
@@ -60,92 +139,97 @@ ParsedRoute* split_route(char *route) {
     // /api/game?rounds=5
     // /api/game is the path
     // rounds=5 is the query
-
 }
 
-
-
 // Takes in the request and the header name
-char* get_header_value(char *request, char *header_name) {
+char *get_header_value(char *request, char *header_name)
+{
 
-        // Header size. 
-        // Example: Host, user_agent
-        size_t header_size = strlen(header_name);
-        
+    // Header size.
+    // Example: Host, user_agent
+    size_t header_size = strlen(header_name);
 
-        // This finds the end of the first line, denoted by \r\n
-        char *line = strstr(request, "\r\n");
+    // This finds the end of the first line, denoted by \r\n
+    char *line = strstr(request, "\r\n");
 
-        // If we don't get the line, that means that we don't have one
-        if (!line) return NULL;
-
-        // Otherwise, we add two to the line in order to get to the next line and skip \r\n
-        line += 2;
-
-        // While we have a line and the line is not \r which is the end character.
-        while (line && *line != '\r') {
-
-            // We use strncmp becuase this lets us specify the amount of chars to compare
-            // We compare line with header_name up to header_size characters
-            // This returns 0 if the strings are equal
-            if (strncmp(line, header_name, header_size) == 0) {
-
-                // If they are equal, we see where the ": " starts. Thats because we need to skip over it to get the header we want
-                char *colon = strstr(line, ": ");
-                if (colon) {
-                    
-                    // We get where our header starts
-                    char *line_start = colon + 2;
-
-                    // Go to the end of the line
-                    char *line_end = strstr(line_start, "\r\n");
-                    
-
-                    // If we run out of space, return NULL
-                    if(!line_end) {
-                        return NULL;
-                    }
-
-                    // Otherwise, we want to get the size of the header
-                    // We subtract where line end address is from line start address
-                    size_t result_size = line_end - line_start;
-
-
-                    // allocate result size + 1 for the header.
-                    // We will copy the header into result
-                    // We do result_size + 1 to include '\0' 
-                    char* result = malloc(result_size + 1);
-                    if (!result) {
-                        return NULL;
-                    }
-
-                    // We will copy result_size characters from line_start into result
-                    strncpy(result, line_start, result_size);
-                    result[result_size] = '\0';
-
-                    return result;
-                }
-
-            }
-
-            // Otherwise, we find the end of the string. 
-            line = strstr(line, "\r\n");
-
-
-            // If we have a line we add two to jump over \r\n. We enter the while loop again
-            if(line)line+=2;
-
-        }
-
-        // If we exit without returning anything, we return null
+    // If we don't get the line, that means that we don't have one
+    if (!line)
         return NULL;
 
+    // Otherwise, we add two to the line in order to get to the next line and skip \r\n
+    line += 2;
+
+    // While we have a line and the line is not \r which is the end character.
+    while (line && *line != '\r')
+    {
+
+        // We use strncmp becuase this lets us specify the amount of chars to compare
+        // We compare line with header_name up to header_size characters
+        // This returns 0 if the strings are equal
+        if (strncmp(line, header_name, header_size) == 0)
+        {
+
+            // If they are equal, we see where the ": " starts. Thats because we need to skip over it to get the header we want
+            char *colon = strstr(line, ": ");
+            if (colon)
+            {
+
+                // We get where our header starts
+                char *line_start = colon + 2;
+
+                // Go to the end of the line
+                char *line_end = strstr(line_start, "\r\n");
+
+                // If we run out of space, return NULL
+                if (!line_end)
+                {
+                    return NULL;
+                }
+
+                // Otherwise, we want to get the size of the header
+                // We subtract where line end address is from line start address
+                size_t result_size = line_end - line_start;
+
+                // allocate result size + 1 for the header.
+                // We will copy the header into result
+                // We do result_size + 1 to include '\0'
+                char *result = malloc(result_size + 1);
+                if (!result)
+                {
+                    return NULL;
+                }
+
+                // We will copy result_size characters from line_start into result
+                strncpy(result, line_start, result_size);
+                result[result_size] = '\0';
+
+                return result;
+            }
+        }
+
+        // Otherwise, we find the end of the string.
+        line = strstr(line, "\r\n");
+
+        // If we have a line we add two to jump over \r\n. We enter the while loop again
+        if (line)
+            line += 2;
     }
 
+    // If we exit without returning anything, we return null
+    return NULL;
+}
 
-
-char* get_request_body(char *response) {
+char *get_request_body(char *response)
+{
     char *end_of_headers = strstr(response, "\r\n\r\n");
+
+    if (end_of_headers == NULL)
+    {
+        return NULL;
+    }
+
+    end_of_headers += 4; // Move past the "\r\n\r\n"
+
     char *start_of_body = strstr(end_of_headers, "n");
 
     char *name_start = strstr(start_of_body, "=");
@@ -155,7 +239,7 @@ char* get_request_body(char *response) {
 
     size_t name_size = name_end - name_start;
 
-    Person *person1 = malloc(sizeof(Person)); 
+    Person *person1 = malloc(sizeof(Person));
     char *name = malloc(name_size + 1);
 
     strncpy(name, name_start, name_size);
@@ -163,18 +247,17 @@ char* get_request_body(char *response) {
     strncpy(person1->name, name, name_size);
     free(name);
 
-
-  
     char *age_start = strstr(start_of_body, "&age=");
-    if (age_start) {
-        age_start += 5;  // Skip "&age=", now at "21"
+    if (age_start)
+    {
+        age_start += 5; // Skip "&age=", now at "21"
     }
     size_t age_size = strlen(age_start);
     printf("This is the age size %zu\n", age_size);
-    
+
     char *age = malloc(age_size + 1);
     strncpy(age, age_start, age_size);
-    person1->age = atoi(age);   
+    person1->age = atoi(age);
     free(age);
 
     printf("This is the age %d\n", person1->age);
@@ -184,42 +267,47 @@ char* get_request_body(char *response) {
     free(person1);
 
     return start_of_body;
-}    
+}
 
-
-char* find_query_start(char *route) {
+char *find_query_start(char *route)
+{
     // Your code here
     // Hint: You've used strstr() and strchr() before...
 
     // /api/game?rounds=5
 
-    char* query_start = strstr(route, "?");
-    if (query_start == NULL) {
+    char *query_start = strstr(route, "?");
+    if (query_start == NULL)
+    {
         return NULL;
     }
 
-    else {
+    else
+    {
         return query_start + 1;
     }
 
     // check if string has ?
     // if not, we return null
-    // 
-
+    //
 }
 
-
-void test_query(char* input) {
+void test_query(char *input)
+{
     char *result = find_query_start(input);
-    
-    if (result != NULL) {
+
+    if (result != NULL)
+    {
         printf("Input: %-20s | Result: %s\n", input, result);
-    } else {
+    }
+    else
+    {
         printf("Input: %-20s | Result: NULL\n", input);
     }
 }
 
-int main() {
+int main()
+{
     // Create socket
     //  AF_INET is IPv4
     // SOCK_STREAM is TCP
@@ -233,22 +321,21 @@ int main() {
         struct in_addr sin_addr
         unsigned short sin_port
     }
-    
+
     */
-       
+
     int opt = 1;
     // This allows the socket to bind even if the port is in TIME_WAIT state.
-    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt))) {
+    if (setsockopt(server_fd, SOL_SOCKET, SO_REUSEADDR, &opt, sizeof(opt)))
+    {
         perror("setsockopt failed");
         exit(EXIT_FAILURE);
     }
 
- 
     struct sockaddr_in address;
-    address.sin_family = AF_INET; // Address family (IPv4 vs IPv6)
+    address.sin_family = AF_INET;         // Address family (IPv4 vs IPv6)
     address.sin_addr.s_addr = INADDR_ANY; // IP address
-    address.sin_port = htons(8080);  // Port 8080
-
+    address.sin_port = htons(8080);       // Port 8080
 
     /*
     Why htons?
@@ -256,27 +343,59 @@ int main() {
     network protocol requires [144, 31] big endian
     */
 
-
     // Binding server to address
-    bind(server_fd, (struct sockaddr*)&address, sizeof(address));
+    bind(server_fd, (struct sockaddr *)&address, sizeof(address));
 
     // Listen for connections. If four people try to connect simotaneously, the fourth gets rejected
     listen(server_fd, 3);
 
+    // Open csv with 30 Washington cities
+    FILE *fptr = fopen("cities.csv", "r");
 
-    while(1) {
+    // If no space, then return error
+    if (fptr == NULL)
+    {
+        perror("File did not open properly");
+        return 1;
+    }
 
-        
+    // Initializing the city count
+    int city_count;
+
+    /*
+    These are the fields for city:
+
+    typedef struct {
+    char name[50];
+    double latitude;
+    double longitude;
+    int population;
+        } City;
+
+
+*/
+    my_cities = load_cities_from_csv(fptr, &city_count);
+
+    // If no returned we exit
+    if (my_cities == NULL)
+    {
+        fprintf(stderr, "Failed to load cities\n");
+        fclose(fptr);
+        return 1;
+    }
+
+    fclose(fptr);
+    while (1)
+    {
+
         // File descriptor
         int client_fd = accept(server_fd, NULL, NULL);
-
 
         char buffer[1024];
 
         // Pulls data from client_fd into buffer. This will read up to 1023 bytes (saves room for null terminator)
         int bytes_read = read(client_fd, buffer, sizeof(buffer) - 1);
         buffer[bytes_read] = '\0';
-
 
         printf("This is the buffer %s\n", buffer);
         char method[16];
@@ -288,7 +407,6 @@ int main() {
         //     printf("Method: %s, Route %s, Protocol %s\n", method, route, protocol);
         // };
 
-      
         // char *host = get_header_value(buffer, "Host");
         // if(host) {
         //     printf("The host was succesfully returned %s\n", host);
@@ -309,51 +427,110 @@ int main() {
 
         // If our request fails
         char *error_response = "HTTP/1.1 404 Not Found\r\n\r\nFuck you";
+        // From the route we extract the route and the query parameters
 
-        if (strcmp(route, "/") == 0) {
-            char *response = "HTTP/1.1 200 OK\r\n\r\nWelcome home!";
-            write(client_fd, response, strlen(response));
-        } 
+        ParsedRoute *pr = split_route(route);
 
-        else if (strcmp(route, "/about") == 0) {
-            char *response = "HTTP/1.1 200 OK\r\n\r\nThis is my HTTP server in C";
-            write(client_fd, response, strlen(response));
+        // This route is to start the game
+        if (strncmp(route, "/api/game/start", 15) == 0)
+        {
+
+            // Parse query params
+            QueryParams qp;
+            split_query_params(&qp, pr->query);
+            // Get rounds from query params (default 5)
+            int rounds = 5;
+            for (int i = 0; i < qp.count; i++)
+            {
+                if (strcmp(qp.params[i].key, "rounds") == 0)
+                {
+                    rounds = atoi(qp.params[i].value);
+                }
+            }
+
+            // Start new game
+            if (current_game)
+                free(current_game); // Clean up old game
+            current_game = start_new_game(my_cities, city_count, rounds);
+
+            // Build JSON response
+            char json[512];
+            snprintf(json, sizeof(json),
+                    "{\"status\":\"success\",\"round\":%d,\"total_rounds\":%d,\"score\":%.0f,\"secret_city\":\"%s\"}",
+                     current_game->round + 1, // Round 1-5 instead of 0-4
+                     current_game->total_rounds,
+                     current_game->score,
+                     current_game->secret_city.name);
+
+            send_json_response(client_fd, json);
+            free(pr);
         }
 
-        else if (strcmp(route, "/api/data") == 0) {
-            char *response;
-            if (strcmp(method, "POST") == 0) {
-                response = "HTTP/1.1 200 OK\r\n\r\nThis will be the post method";
-                char *request = get_request_body(buffer);
-                printf("This is gonna be the request%s\n", request);
+        else if (strncmp(route, "/api/game/guess", 15) == 0)
+        {
+            if (!current_game)
+            {
+                char *error = "{\"error\":\"No active game. Start a game first.\"}";
+                send_json_response(client_fd, error);
+                free(pr);
+                continue;
+            }
 
-                write(client_fd, response, strlen(response));
+            // Grab both the lat and long from query parameters
+            QueryParams qp;
+            split_query_params(&qp, pr->query);
+
+            // Extract lat/lon from query params
+            double lat = 0, lon = 0;
+            for (int i = 0; i < qp.count; i++)
+            {
+                if (strcmp(qp.params[i].key, "lat") == 0)
+                {
+                    lat = atof(qp.params[i].value);
+                }
+                else if (strcmp(qp.params[i].key, "lon") == 0)
+                {
+                    lon = atof(qp.params[i].value);
+                }
             }
-            else{
-                response = "Fucking bitch";
-                write(client_fd, response, strlen(response));
+
+            // Process guess
+            double distance = process_guess(current_game, lat, lon);
+            char city_name[50];
+            strcpy(city_name, current_game->secret_city.name);
+
+            // Move to next round
+            current_game->round++;
+            if (current_game->round < current_game->total_rounds)
+            {
+                City *next_city = get_random_city(city_count, my_cities);
+                current_game->secret_city = *next_city;
             }
-         
-           
+
+            // Build JSON response
+            char json[512];
+            snprintf(json, sizeof(json),
+                     "{\"distance\":%.1f,\"correct_city:\"%s\",\"score\":%.0f,\"round\":%d,\"game_over\":%s}",
+                     distance,
+                     city_name,
+                     current_game->score,
+                     current_game->round,
+                     current_game->round >= current_game->total_rounds ? "true" : "false");
+
+            send_json_response(client_fd, json);
+            free(pr);
         }
-        else {
+
+        else
+        {
             write(client_fd, error_response, strlen(error_response));
-        
         }
-
-
 
         // free(host);
         // free(user_agent);
-  
-
-       
-   
-        
-
 
         /*
-        
+
         Perfect! Now here's your task:
 
         **Parse the path from the HTTP request and send the correct response:**
@@ -378,35 +555,30 @@ int main() {
         ```
 
         Give it a shot and let me know what you come up with!
-        
+
         */
 
+        char *test_query_one = "/api/game?rounds=5";
+        char *test_query_two = "/about";
+        char *test_query_three = "/?test=1";
 
-    
-    char *test_query_one = "/api/game?rounds=5";
-    char *test_query_two = "/about";
-    char *test_query_three = "/?test=1";
+        test_query(test_query_one);
+        test_query(test_query_two);
+        test_query(test_query_three);
 
+        ParsedRoute *route_to_use = split_route(test_query_one);
 
-    test_query(test_query_one);
-    test_query(test_query_two);
-    test_query(test_query_three);
+        printf("This is the route: %s\n", route_to_use->path);
+        printf("This is the query: %s\n", route_to_use->query);
 
+        QueryParams qp;
 
+        split_query_params(&qp, "rounds=5&difficulty=hard&map=world");
 
-    ParsedRoute *route_to_use = split_route(test_query_one);
+        free(route_to_use);
 
-    printf("This is the route: %s\n", route_to_use->path);
-    printf("This is the query: %s\n", route_to_use->query);
-
-    free(route_to_use);
-
-    close(client_fd);
+        close(client_fd);
     }
 
-
-
     close(server_fd);
-
-
 }

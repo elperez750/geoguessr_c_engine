@@ -54,13 +54,15 @@ City* get_random_city(int count, City *cities) {
 
 
 
+// This function loads cities and returns an array with multiple city structs
 City* load_cities_from_csv(FILE *fptr, int* city_count) {
+
+    // Line which includes name, lat, long, and population
     char line[100];
 
     // if first line is null, return null. 
     if (fgets(line, sizeof(line), fptr) == NULL) {
         return NULL;
-      
     }
 
     // we initialize capacity to 20
